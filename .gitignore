@@ -1,0 +1,7 @@
+.clangd/
+.DS_Store
+.vscode/
+build/
+compile_commands.json
+notes
+untracked/

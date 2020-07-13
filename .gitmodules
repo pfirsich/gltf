@@ -1,0 +1,6 @@
+[submodule "glwrap"]
+	path = glwrap
+	url = https://github.com/pfirsich/glwrap.git
+[submodule "simdjson"]
+	path = simdjson
+	url = https://github.com/simdjson/simdjson.git
