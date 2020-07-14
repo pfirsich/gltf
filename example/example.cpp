@@ -322,6 +322,7 @@ struct Scene {
                     } else if constexpr (std::is_same_v<T, glm::vec3>) {
                         return glm::mix(from, to, alpha);
                     }
+                    assert(false && "Invalid type for animation channel");
                 }
             }
 
