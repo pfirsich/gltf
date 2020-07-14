@@ -1073,7 +1073,7 @@ void checkAttributeName(std::string_view name)
 {
     static constexpr std::array<std::string_view, 4> indexedAttributes { "TEXCOORD_", "COLOR_",
         "JOINTS_", "WEIGHTS_" };
-    if (name.size() < 0)
+    if (name.size() == 0)
         error("Attribute name length is 0");
 
     if (name[0] == '_') // application specific, anything goes
@@ -1560,13 +1560,13 @@ bool checkGlbBinChunk(const GlbChunkHeader& binChunkHeader, const Buffer& buffer
         return false;
     }
 
-    const auto binChunkSizeDiff = binChunkHeader.length - buffer0.byteLength;
-    if (binChunkSizeDiff < 0) {
+    if (binChunkHeader.length < buffer0.byteLength) {
         logger.error("BIN chunk too small");
         return false;
     }
 
-    if (binChunkSizeDiff > 3) {
+    const auto binChunkSizeDiff = binChunkHeader.length - buffer0.byteLength;
+    if (binChunkSizeDiff > 3) { // max 3 bytes of padding
         logger.error("BIN chunk too large");
         return false;
     }
