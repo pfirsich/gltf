@@ -1,220 +1,18 @@
 #include <iostream>
 
-#include <glm/gtc/epsilon.hpp>
-#include <glm/gtx/matrix_query.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glw.hpp>
 #include <glwx.hpp>
 
 #include "gltf.hpp"
 
+#include "shaders.hpp"
+
 using namespace std::literals;
-
-namespace AttributeLocations {
-constexpr size_t Position = 0;
-constexpr size_t Normal = 1;
-constexpr size_t Tangent = 2;
-constexpr size_t TexCoord0 = 3;
-constexpr size_t TexCoord1 = 4;
-constexpr size_t Color0 = 5;
-constexpr size_t Joints0 = 6;
-constexpr size_t Weights0 = 7;
-}
-
-const auto vert = R"(
-    #version 330 core
-
-    uniform mat4 modelMatrix;
-    uniform mat4 viewMatrix;
-    uniform mat4 projectionMatrix;
-    uniform mat3 normalMatrix;
-
-    layout (location = 0) in vec3 attrPosition;
-    layout (location = 1) in vec3 attrNormal;
-    layout (location = 3) in vec2 attrTexCoords;
-
-    out vec2 texCoords;
-    out vec3 normal; // view space
-
-    void main() {
-        texCoords = attrTexCoords;
-        normal = normalMatrix * attrNormal;
-        gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(attrPosition, 1.0);
-    }
-)"s;
-
-const auto skinningVert = R"(
-    #version 330 core
-
-    const int MAX_JOINTS = 32;
-
-    uniform mat4 modelMatrix;
-    uniform mat4 viewMatrix;
-    uniform mat4 projectionMatrix;
-    uniform mat3 normalMatrix;
-    uniform mat4 jointMatrices[MAX_JOINTS];
-
-    layout (location = 0) in vec3 attrPosition;
-    layout (location = 1) in vec3 attrNormal;
-    layout (location = 3) in vec2 attrTexCoords;
-    layout (location = 6) in vec4 attrJointIds;
-    layout (location = 7) in vec4 attrJointWeights;
-
-    out vec2 texCoords;
-    out vec3 normal; // view space
-
-    void main() {
-        mat4 skinMatrix = attrJointWeights.x * jointMatrices[int(attrJointIds.x)]
-                        + attrJointWeights.y * jointMatrices[int(attrJointIds.y)]
-                        + attrJointWeights.z * jointMatrices[int(attrJointIds.z)]
-                        + attrJointWeights.w * jointMatrices[int(attrJointIds.w)];
-
-        texCoords = attrTexCoords;
-        normal = normalMatrix * mat3(skinMatrix) * attrNormal;
-        gl_Position = projectionMatrix * viewMatrix * modelMatrix * skinMatrix * vec4(attrPosition, 1.0);
-    }
-)"s;
-
-const auto frag = R"(
-    #version 330 core
-
-    uniform vec4 baseColorFactor;
-    uniform sampler2D baseColorTexture;
-    uniform vec3 lightDir; // view space
-
-    in vec2 texCoords;
-    in vec3 normal;
-
-    out vec4 fragColor;
-
-    void main() {
-        vec4 base = baseColorFactor * texture2D(baseColorTexture, texCoords);
-        float nDotL = max(dot(lightDir, normalize(normal)), 0.0);
-        fragColor = vec4(base.rgb * nDotL, base.a);
-        // fragColor = vec4(1.0);
-        // fragColor = vec4(normal.rgb * 2.0 - 1.0, 1.0);
-        // fragColor = base;
-    }
-)"s;
-
-template <typename T>
-constexpr auto eps = 1e-6f; // actual epsilon is too large
-
-template <typename T>
-bool feq(const T& a, const T& b)
-{
-    static_assert(std::is_floating_point_v<T>);
-    return std::fabs(a - b) < eps<T>;
-}
-
-class Transform {
-public:
-    Transform()
-    {
-    }
-
-    Transform(const glm::mat4& matrix)
-    {
-        setMatrix(matrix);
-    }
-
-    const glm::vec3& getPosition() const
-    {
-        return position_;
-    }
-
-    void setPosition(const glm::vec3& position)
-    {
-        position_ = position;
-        dirty_ = true;
-    }
-
-    void move(const glm::vec3& v)
-    {
-        setPosition(position_ + v);
-    }
-
-    void moveLocal(const glm::vec3& v)
-    {
-        move(orientation_ * v);
-    }
-
-    const glm::vec3& getScale() const
-    {
-        return scale_;
-    }
-
-    void setScale(const glm::vec3& scale)
-    {
-        scale_ = scale;
-        dirty_ = true;
-    }
-
-    void scale(const glm::vec3& v)
-    {
-        setScale(scale_ * v);
-    }
-
-    const glm::quat& getOrientation() const
-    {
-        return orientation_;
-    }
-
-    void setOrientation(const glm::quat& orientation)
-    {
-        orientation_ = orientation;
-        dirty_ = true;
-    }
-
-    void rotate(const glm::quat& v)
-    {
-        setOrientation(v * orientation_);
-    }
-
-    void rotateLocal(const glm::quat& v)
-    {
-        setOrientation(orientation_ * v);
-    }
-
-    void setMatrix(const glm::mat4& matrix)
-    {
-        // glm::decompose is somehow incorrect
-        assert(matrix[0][3] == 0.0f && matrix[1][3] == 0.0f && matrix[2][3] == 0.0f
-            && matrix[3][3] == 1.0f);
-        const auto mat3 = glm::mat3(matrix);
-        assert(glm::determinant(mat3) != 0.0f);
-        position_ = glm::vec3(matrix[3]);
-        scale_ = glm::vec3(glm::length(mat3[0]), glm::length(mat3[1]), glm::length(mat3[2]));
-        auto rot = glm::mat3(mat3[0] / scale_.x, mat3[1] / scale_.y, mat3[2] / scale_.z);
-        if (glm::determinant(rot) < 0.0f) {
-            scale_ *= -1.0f;
-            rot *= -1.0f;
-        }
-        assert(feq(glm::determinant(rot), 1.0f));
-        assert(glm::isIdentity(glm::transpose(rot) * rot, 1e-4f));
-        orientation_ = glm::normalize(glm::quat_cast(rot));
-        dirty_ = true;
-        assert(glm::isNull(matrix - getMatrix(), 1e-4f));
-    }
-
-    const glm::mat4& getMatrix() const
-    {
-        if (dirty_)
-            matrix_ = glm::translate(position_) * glm::mat4_cast(orientation_) * glm::scale(scale_);
-        return matrix_;
-    }
-
-private:
-    glm::vec3 position_ { 0.0f, 0.0f, 0.0f };
-    glm::vec3 scale_ { 1.0f, 1.0f, 1.0f };
-    glm::quat orientation_ { 1.0f, 0.0f, 0.0f, 0.0f };
-    mutable glm::mat4 matrix_ { 1.0f };
-    bool dirty_ { false };
-};
 
 struct Scene {
     struct Node {
-        Transform transform;
+        glwx::Transform transform;
         std::vector<size_t> primitives;
         std::vector<size_t> children;
         std::optional<size_t> parent;
@@ -229,7 +27,7 @@ struct Scene {
 
         std::vector<glm::mat4> boneMatrices;
         std::vector<Joint> joints;
-        size_t rootNode = std::numeric_limits<size_t>::max();
+        size_t rootNode;
     };
 
     struct Camera {
@@ -240,53 +38,6 @@ struct Scene {
     struct Material {
         glm::vec4 baseColorFactor { 1.0f, 1.0f, 1.0f, 1.0f };
         std::shared_ptr<glw::Texture> texture;
-    };
-
-    struct Aabb {
-        glm::vec3 min = glm::vec3(HUGE_VALF);
-        glm::vec3 max = glm::vec3(-HUGE_VALF);
-
-        bool valid() const
-        {
-            return glm::all(glm::lessThanEqual(min, max));
-        }
-
-        void fit(const glm::vec3& point)
-        {
-            min = glm::min(min, point);
-            max = glm::max(max, point);
-        }
-
-        void fit(const Aabb& other)
-        {
-            fit(other.min);
-            fit(other.max);
-        }
-
-        glm::vec3 size() const
-        {
-            return max - min;
-        }
-
-        glm::vec3 center() const
-        {
-            return (min + max) * 0.5f;
-        }
-
-        Aabb transformed(const glm::mat4& transform) const
-        {
-            Aabb ret;
-            // fit all transformed corners
-            ret.fit(glm::vec3(transform * glm::vec4(min.x, min.y, min.z, 1.0f)));
-            ret.fit(glm::vec3(transform * glm::vec4(max.x, min.y, min.z, 1.0f)));
-            ret.fit(glm::vec3(transform * glm::vec4(min.x, min.y, max.z, 1.0f)));
-            ret.fit(glm::vec3(transform * glm::vec4(max.x, min.y, max.z, 1.0f)));
-            ret.fit(glm::vec3(transform * glm::vec4(min.x, max.y, min.z, 1.0f)));
-            ret.fit(glm::vec3(transform * glm::vec4(max.x, max.y, min.z, 1.0f)));
-            ret.fit(glm::vec3(transform * glm::vec4(min.x, max.y, max.z, 1.0f)));
-            ret.fit(glm::vec3(transform * glm::vec4(max.x, max.y, max.z, 1.0f)));
-            return ret;
-        }
     };
 
     struct Primitive {
@@ -407,7 +158,7 @@ struct Scene {
     std::vector<Skin> skins;
     Material defaultMaterial;
     std::vector<size_t> rootNodes;
-    Aabb bbox;
+    glwx::Aabb bbox;
     std::vector<Animation> animations;
 
     glm::mat4 getFullTransform(size_t nodeIndex) const
@@ -688,7 +439,7 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
     // A single mesh.primitive corresponds to a glwx::Mesh, so a glTF mesh is actually
     // a collection of glwx::Mesh-es.
     std::vector<std::vector<size_t>> meshPrimitivesMap;
-    std::vector<Scene::Aabb> meshBboxs;
+    std::vector<glwx::Aabb> meshBboxs;
     for (size_t i = 0; i < gltfFile.meshes.size(); ++i) {
         const auto& gmesh = gltfFile.meshes[i];
         auto& primitives = meshPrimitivesMap.emplace_back();
@@ -889,7 +640,7 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
     return scene;
 }
 
-void moveNode(Transform& trafo, const glm::vec2& look, const glm::vec3& move)
+void moveNode(glwx::Transform& trafo, const glm::vec2& look, const glm::vec3& move)
 {
     trafo.rotate(glm::angleAxis(-look.x, glm::vec3(0.0f, 1.0f, 0.0f)));
     trafo.rotateLocal(glm::angleAxis(-look.y, glm::vec3(1.0f, 0.0f, 0.0f)));
