@@ -39,7 +39,7 @@ glm::mat4 Camera::Perspective::getMatrix() const
 
 glm::mat4 Camera::Orthographic::getMatrix() const
 {
-    glm::mat4 ret;
+    glm::mat4 ret(0.0f);
     ret[0][0] = 1.0f / xmag;
     ret[1][1] = 1.0f / ymag;
     ret[2][2] = 2.0f / (znear - zfar);
