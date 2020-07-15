@@ -11,27 +11,33 @@
 using namespace std::literals;
 
 struct Scene {
+    using NodeIndex = size_t;
+    using SkinIndex = size_t;
+    using MaterialIndex = size_t;
+    using PrimitiveIndex = size_t;
+    using CameraIndex = size_t;
+
     struct Node {
+        std::optional<NodeIndex> parent;
+        std::vector<NodeIndex> children;
         glwx::Transform transform;
-        std::vector<size_t> primitives;
-        std::vector<size_t> children;
-        std::optional<size_t> parent;
-        std::optional<size_t> skin;
+        std::vector<PrimitiveIndex> primitives;
+        std::optional<SkinIndex> skin;
     };
 
     struct Skin {
         struct Joint {
-            size_t node;
+            NodeIndex node;
             glm::mat4 inverseBindMatrix = glm::mat4(1.0f);
         };
 
         std::vector<glm::mat4> boneMatrices;
         std::vector<Joint> joints;
-        size_t rootNode;
+        NodeIndex rootNode;
     };
 
     struct Camera {
-        size_t node;
+        NodeIndex node;
         glm::mat4 projection;
     };
 
@@ -42,7 +48,7 @@ struct Scene {
 
     struct Primitive {
         glwx::Primitive drawable;
-        std::optional<size_t> material;
+        std::optional<MaterialIndex> material;
     };
 
     struct Animation {
@@ -57,7 +63,7 @@ struct Scene {
             };
 
             Destination destination;
-            size_t nodeIndex;
+            NodeIndex nodeIndex;
             Interpolation interpolation;
             std::vector<Keyframe> keyframes {}; // sorted by time
 
@@ -157,11 +163,11 @@ struct Scene {
     std::vector<Material> materials;
     std::vector<Skin> skins;
     Material defaultMaterial;
-    std::vector<size_t> rootNodes;
+    std::vector<NodeIndex> rootNodes;
     glwx::Aabb bbox;
     std::vector<Animation> animations;
 
-    glm::mat4 getFullTransform(size_t nodeIndex) const
+    glm::mat4 getFullTransform(NodeIndex nodeIndex) const
     {
         const auto& node = nodes[nodeIndex];
         if (node.parent)
@@ -169,7 +175,7 @@ struct Scene {
         return node.transform.getMatrix();
     }
 
-    void updateBoneMatrices(size_t skinIndex)
+    void updateBoneMatrices(SkinIndex skinIndex)
     {
         auto& skin = skins[skinIndex];
         const auto rootInverse = glm::inverse(getFullTransform(skin.rootNode));
@@ -185,7 +191,7 @@ struct Scene {
             updateBoneMatrices(i);
     }
 
-    void drawPrimitive(size_t primitiveIndex, const glw::ShaderProgram& shader) const
+    void drawPrimitive(PrimitiveIndex primitiveIndex, const glw::ShaderProgram& shader) const
     {
         const auto& primitive = primitives[primitiveIndex];
 
@@ -198,8 +204,8 @@ struct Scene {
         primitive.drawable.draw();
     }
 
-    void drawNode(size_t nodeIndex, const glm::mat4& parentModelMatrix, const glm::mat4& viewMatrix,
-        const glm::mat4& projectionMatrix) const
+    void drawNode(NodeIndex nodeIndex, const glm::mat4& parentModelMatrix,
+        const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix) const
     {
         const auto& node = nodes[nodeIndex];
 
@@ -231,7 +237,7 @@ struct Scene {
             drawNode(child, modelMatrix, viewMatrix, projectionMatrix);
     }
 
-    void draw(size_t cameraIndex) const
+    void draw(CameraIndex cameraIndex) const
     {
         assert(cameraIndex < cameras.size());
         const auto& camera = cameras[cameraIndex];
@@ -272,7 +278,7 @@ glm::vec3 makeVec3(const std::vector<double>& vals)
         static_cast<float>(vals[0]), static_cast<float>(vals[1]), static_cast<float>(vals[2]));
 }
 
-Scene::Animation::Interpolation convertEnum(gltf::Animation::Sampler::Interpolation interp)
+Scene::Animation::Interpolation convertInterpolation(gltf::Animation::Sampler::Interpolation interp)
 {
     switch (interp) {
     case gltf::Animation::Sampler::Interpolation::Linear:
@@ -436,8 +442,8 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
         }
     }
 
-    // A single mesh.primitive corresponds to a glwx::Mesh, so a glTF mesh is actually
-    // a collection of glwx::Mesh-es.
+    // A single mesh.primitive corresponds to multiple primitives, but after this block of code
+    // we will never consider a mesh again (just primitives)
     std::vector<std::vector<size_t>> meshPrimitivesMap;
     std::vector<glwx::Aabb> meshBboxs;
     for (size_t i = 0; i < gltfFile.meshes.size(); ++i) {
@@ -603,19 +609,19 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
             case gltf::Animation::Channel::Target::Path::Translation:
                 channel = Scene::Animation::ChannelBase<glm::vec3> {
                     Scene::Animation::Destination::Translation, *gchannel.target.node,
-                    convertEnum(gsampler.interpolation)
+                    convertInterpolation(gsampler.interpolation)
                 };
                 break;
             case gltf::Animation::Channel::Target::Path::Rotation:
                 channel = Scene::Animation::ChannelBase<glm::quat> {
                     Scene::Animation::Destination::Rotation, *gchannel.target.node,
-                    convertEnum(gsampler.interpolation)
+                    convertInterpolation(gsampler.interpolation)
                 };
                 break;
             case gltf::Animation::Channel::Target::Path::Scale:
                 channel = Scene::Animation::ChannelBase<glm::vec3> {
                     Scene::Animation::Destination::Scale, *gchannel.target.node,
-                    convertEnum(gsampler.interpolation)
+                    convertInterpolation(gsampler.interpolation)
                 };
                 break;
             case gltf::Animation::Channel::Target::Path::Weights:
@@ -638,13 +644,6 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
     }
 
     return scene;
-}
-
-void moveNode(glwx::Transform& trafo, const glm::vec2& look, const glm::vec3& move)
-{
-    trafo.rotate(glm::angleAxis(-look.x, glm::vec3(0.0f, 1.0f, 0.0f)));
-    trafo.rotateLocal(glm::angleAxis(-look.y, glm::vec3(1.0f, 0.0f, 0.0f)));
-    trafo.moveLocal(move);
 }
 
 int main(int argc, char** argv)
@@ -749,7 +748,9 @@ int main(int argc, char** argv)
         const auto move = speed * dt * glm::vec3(sideways, updown, forward);
         if (glm::length(look) > 0.0f || glm::length(move) > 0.0f) {
             auto& node = scene->nodes[scene->cameras[cameraIndex].node];
-            moveNode(node.transform, look, move);
+            node.transform.rotate(glm::angleAxis(-look.x, glm::vec3(0.0f, 1.0f, 0.0f)));
+            node.transform.rotateLocal(glm::angleAxis(-look.y, glm::vec3(1.0f, 0.0f, 0.0f)));
+            node.transform.moveLocal(move);
         }
 
         if (!scene->animations.empty())
