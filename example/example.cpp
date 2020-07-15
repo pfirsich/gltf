@@ -271,11 +271,31 @@ size_t getAttributeLocation(std::string_view id)
         assert(false && "Invalid attribute id");
 }
 
-glm::vec3 makeVec3(const std::vector<double>& vals)
+template <typename Container>
+glm::vec3 makeVec3(const Container& vals)
 {
     assert(vals.size() == 3);
     return glm::vec3(
         static_cast<float>(vals[0]), static_cast<float>(vals[1]), static_cast<float>(vals[2]));
+}
+
+template <typename Container>
+glm::vec4 makeVec4(const Container& vals)
+{
+    assert(vals.size() == 4);
+    return glm::vec4(static_cast<float>(vals[0]), static_cast<float>(vals[1]),
+        static_cast<float>(vals[2]), static_cast<float>(vals[3]));
+}
+
+template <typename Container>
+glm::mat4 makeMat4(const Container& vals)
+{
+    assert(vals.size() == 16);
+    glm::mat4 ret;
+    const auto ptr = glm::value_ptr(ret);
+    for (size_t i = 0; i < 16; ++i)
+        ptr[i] = vals[i];
+    return ret;
 }
 
 Scene::Animation::Interpolation convertInterpolation(gltf::Animation::Sampler::Interpolation interp)
@@ -433,7 +453,7 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
         material.texture = defaultTexture;
         if (gmaterial.pbrMetallicRoughness) {
             const auto& pbr = *gmaterial.pbrMetallicRoughness;
-            material.baseColorFactor = pbr.baseColorFactor;
+            material.baseColorFactor = makeVec4(pbr.baseColorFactor);
             if (pbr.baseColorTexture) {
                 const auto& texInfo = *pbr.baseColorTexture;
                 assert(texInfo.texCoord == 0);
@@ -549,10 +569,11 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
     for (const auto& gnode : gltfFile.nodes) {
         auto& node = scene.nodes.emplace_back();
         // Matrix has to be TRS decomposable
-        const auto trafo = gnode.getTransformMatrix();
+        const auto trafo = makeMat4(gnode.getTransformMatrix());
         node.transform.setMatrix(trafo);
-        const auto fullTrafo
-            = gnode.parent ? gltfFile.nodes[*gnode.parent].getTransformMatrix() * trafo : trafo;
+        const auto fullTrafo = gnode.parent
+            ? makeMat4(gltfFile.nodes[*gnode.parent].getTransformMatrix()) * trafo
+            : trafo;
         if (gnode.mesh) {
             node.primitives = meshPrimitivesMap[*gnode.mesh];
 
@@ -570,7 +591,7 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
             const auto& gcamera = gltfFile.cameras[*gnode.camera];
             auto& camera = scene.cameras.emplace_back();
             camera.node = scene.nodes.size() - 1;
-            camera.projection = gcamera.getProjection(aspectRatio);
+            camera.projection = makeMat4(gcamera.getProjection(aspectRatio));
         }
 
         if (gnode.skin) {

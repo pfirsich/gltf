@@ -14,9 +14,6 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
 #include <variant>
 #include <vector>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
-
 namespace gltf {
 using GlEnum = uint32_t; // This should be compatible with GLenum (or is supposed to)
 using DisplayName = std::optional<std::string>; // non-unique optional name for top-level objects
@@ -53,6 +50,20 @@ using SamplerIndex = size_t;
 using SceneIndex = size_t;
 using SkinIndex = size_t;
 using TextureIndex = size_t;
+
+using vec3 = std::array<float, 3>;
+using vec4 = std::array<float, 4>;
+using quat = std::array<float, 4>; // x, y, z, w
+using mat4 = std::array<float, 16>; // column-major order
+
+// clang-format off
+constexpr mat4 mat4Identity = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f,
+};
+// clang-format on
 
 struct Buffer {
     // Empty if the buffer refers to the GLB BIN chunk. Only valid for buffer 0.
@@ -134,8 +145,8 @@ struct Camera {
 
         // Returns matrices as specified here:
         // https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#projection-matrices
-        glm::mat4 getMatrix(float aspectRatio) const;
-        glm::mat4 getMatrix() const; // calls aspectRation.value() (throws if aspectRatio is empty)
+        mat4 getMatrix(float aspectRatio) const;
+        mat4 getMatrix() const; // calls aspectRation.value() (throws if aspectRatio is empty)
     };
 
     struct Orthographic {
@@ -146,7 +157,7 @@ struct Camera {
 
         Extras extras;
 
-        glm::mat4 getMatrix() const;
+        mat4 getMatrix() const;
     };
 
     // Actually this has a mandatory `type` instead
@@ -155,7 +166,7 @@ struct Camera {
     DisplayName name;
     Extras extras;
 
-    glm::mat4 getProjection(float aspectRatio) const;
+    mat4 getProjection(float aspectRatio) const;
 };
 
 struct Image {
@@ -242,7 +253,7 @@ struct Material {
     };
 
     struct PbrMetallicRoughness {
-        glm::vec4 baseColorFactor { 1.0f, 1.0f, 1.0f, 1.0f };
+        vec4 baseColorFactor { 1.0f, 1.0f, 1.0f, 1.0f };
         std::optional<TextureInfo> baseColorTexture;
         float metallicFactor = 1.0f;
         float roughnessFactor = 1.0f;
@@ -264,7 +275,7 @@ struct Material {
     std::optional<NormalTextureInfo> normalTexture;
     std::optional<OcclusionTextureInfo> occlusionTexture; // sampled from R channel
     std::optional<TextureInfo> emissiveTexture; // sampled from A channel
-    glm::vec3 emissiveFactor { 0.0f, 0.0f, 0.0f };
+    vec3 emissiveFactor { 0.0f, 0.0f, 0.0f };
     AlphaMode alphaMode = AlphaMode::Opaque;
     float alphaCutoff = 0.5f;
     bool doubleSided = false;
@@ -312,21 +323,21 @@ struct Skin {
 
 struct Node {
     struct Trs {
-        glm::vec3 translation { 0.0f, 0.0f, 0.0f };
-        glm::vec3 scale { 1.0f, 1.0f, 1.0f };
-        glm::quat rotation { 1.0f, 0.0f, 0.0f, 0.0f };
+        vec3 translation { 0.0f, 0.0f, 0.0f };
+        vec3 scale { 1.0f, 1.0f, 1.0f };
+        quat rotation { 0.0f, 0.0f, 0.0f, 1.0f };
 
-        glm::mat4 getMatrix() const;
+        mat4 getMatrix() const;
     };
 
     // NOTE: (from spec:) "When matrix is defined, it must be decomposable to TRS. This implies that
     // transformation matrices cannot skew or shear."
-    using Transform = std::variant<glm::mat4, Trs>;
+    using Transform = std::variant<mat4, Trs>;
 
     std::optional<CameraIndex> camera;
     std::vector<NodeIndex> children; // values are unique
     std::optional<SkinIndex> skin;
-    Transform transform = glm::mat4(1.0f);
+    Transform transform = mat4Identity;
     std::optional<MeshIndex> mesh;
     // std::vector<float> weights;
 
@@ -338,7 +349,7 @@ struct Node {
     // "no node may be a direct descendant of more than one node"
     std::optional<NodeIndex> parent;
 
-    glm::mat4 getTransformMatrix() const;
+    mat4 getTransformMatrix() const;
 };
 
 struct Scene {

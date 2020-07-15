@@ -1,54 +1,52 @@
 #include "gltf.hpp"
 
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <set>
 #include <sstream>
 
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/transform.hpp>
 #include <simdjson.h>
 
 using namespace std::literals;
 
 namespace gltf {
-glm::mat4 Camera::Perspective::getMatrix(float aspectRatio) const
+mat4 Camera::Perspective::getMatrix(float aspectRatio) const
 {
-    const auto invTanY = 1.0f / glm::tan(0.5f * yfov);
-    glm::mat4 ret(0.0f);
-    ret[0][0] = invTanY / aspectRatio;
-    ret[1][1] = invTanY;
-    ret[2][3] = -1.0f;
+    const auto invTanY = 1.0f / std::tan(0.5f * yfov);
+    mat4 ret {};
+    ret[0] = invTanY / aspectRatio;
+    ret[5] = invTanY;
+    ret[11] = -1.0f;
 
     if (zfar) {
         const auto n = znear, f = *zfar;
-        ret[2][2] = (n + f) / (n - f);
-        ret[3][2] = 2.0f * n * f / (n - f);
+        ret[10] = (n + f) / (n - f);
+        ret[14] = 2.0f * n * f / (n - f);
     } else {
-        ret[2][2] = -1.0f;
-        ret[3][2] = -2.0f * znear;
+        ret[10] = -1.0f;
+        ret[14] = -2.0f * znear;
     }
     return ret;
 }
 
-glm::mat4 Camera::Perspective::getMatrix() const
+mat4 Camera::Perspective::getMatrix() const
 {
     return getMatrix(aspectRatio.value());
 }
 
-glm::mat4 Camera::Orthographic::getMatrix() const
+mat4 Camera::Orthographic::getMatrix() const
 {
-    glm::mat4 ret(0.0f);
-    ret[0][0] = 1.0f / xmag;
-    ret[1][1] = 1.0f / ymag;
-    ret[2][2] = 2.0f / (znear - zfar);
-    ret[3][3] = 1.0f;
-    ret[3][2] = (znear + zfar) / (znear - zfar);
+    mat4 ret {};
+    ret[0] = 1.0f / xmag;
+    ret[5] = 1.0f / ymag;
+    ret[10] = 2.0f / (znear - zfar);
+    ret[14] = (znear + zfar) / (znear - zfar);
+    ret[15] = 1.0f;
     return ret;
 }
 
-glm::mat4 Camera::getProjection(float aspectRatio) const
+mat4 Camera::getProjection(float aspectRatio) const
 {
     if (std::holds_alternative<Camera::Orthographic>(projection))
         return std::get<Camera::Orthographic>(projection).getMatrix();
@@ -56,15 +54,49 @@ glm::mat4 Camera::getProjection(float aspectRatio) const
         return std::get<Camera::Perspective>(projection).getMatrix(aspectRatio);
 }
 
-glm::mat4 Node::Trs::getMatrix() const
+mat4 Node::Trs::getMatrix() const
 {
-    return glm::translate(translation) * glm::mat4_cast(rotation) * glm::scale(scale);
+    const auto& t = translation;
+    const auto& q = rotation;
+    const auto& s = scale;
+
+    // Mostly from glm
+    float qxx = q[0] * q[0];
+    float qyy = q[1] * q[1];
+    float qzz = q[2] * q[2];
+    float qxz = q[0] * q[2];
+    float qxy = q[0] * q[1];
+    float qyz = q[1] * q[2];
+    float qwx = q[3] * q[0];
+    float qwy = q[3] * q[1];
+    float qwz = q[3] * q[2];
+
+    float r0 = 1.0f - 2.0f * (qyy + qzz);
+    float r1 = 2.0f * (qxy + qwz);
+    float r2 = 2.0f * (qxz - qwy);
+
+    float r3 = 2.0f * (qxy - qwz);
+    float r4 = 1.0f - 2.0f * (qxx + qzz);
+    float r5 = 2.0f * (qyz + qwx);
+
+    float r6 = 2.0f * (qxz + qwy);
+    float r7 = 2.0f * (qyz - qwx);
+    float r8 = 1.0f - 2.0f * (qxx + qyy);
+
+    mat4 m;
+    // clang-format off
+    m[0] = s[0] * r0; m[4] = s[1] * r3; m[ 8] = s[2] * r6; m[12] = t[0];
+    m[1] = s[0] * r1; m[5] = s[1] * r4; m[ 9] = s[2] * r7; m[13] = t[1];
+    m[2] = s[0] * r2; m[6] = s[1] * r5; m[10] = s[2] * r8; m[14] = t[2];
+    m[3] =      0.0f; m[7] =      0.0f; m[11] =      0.0f; m[15] = 1.0f;
+    // clang-format on
+    return m;
 }
 
-glm::mat4 Node::getTransformMatrix() const
+mat4 Node::getTransformMatrix() const
 {
-    if (std::holds_alternative<glm::mat4>(transform))
-        return std::get<glm::mat4>(transform);
+    if (std::holds_alternative<mat4>(transform))
+        return std::get<mat4>(transform);
     else
         return std::get<Trs>(transform).getMatrix();
 }
@@ -268,19 +300,17 @@ bool get<bool>(const simdjson::dom::element& element, std::string_view path)
 }
 
 template <typename T>
-void getGlm(T& obj, size_t num, const simdjson::dom::element& element, std::string_view path,
+void getMath(T& obj, size_t num, const simdjson::dom::element& element, std::string_view path,
     bool normalized = false)
 {
     const auto arr = get<simdjson::dom::array>(element, path);
-    const auto ptr = glm::value_ptr(obj);
+    const auto ptr = &obj[0];
     size_t i = 0;
     const std::string elemName = std::string(path) + "[]";
     for (const auto item : arr) {
         if (i >= num)
             error("Array is too large for \"", path, "\" (should be ", num, ")");
-        // vec are obviously in the right order
-        // quat is (x, y, z, w) for glm and glTF
-        // glm::mat* and glTF matrices are both column-major
+        // vec3, vec4, quat, mat4 are all in the same order as gltf
         ptr[i] = get<float>(item, elemName);
         if (normalized)
             if (ptr[i] < 0.0f || ptr[i] > 1.0f)
@@ -462,32 +492,32 @@ void readNodes(Gltf& file, const simdjson::dom::element& elem, const Logger& log
             } else if (key == "skin") {
                 node.skin = get<uint64_t>(value, "nodes[].skin");
             } else if (key == "matrix") {
-                glm::mat4 mat;
-                getGlm<glm::mat4>(mat, 16, value, "nodes[].matrix");
+                mat4 mat;
+                getMath<mat4>(mat, 16, value, "nodes[].matrix");
                 node.transform = mat;
                 foundMatrix = true;
             } else if (key == "translation") {
                 if (!foundMatrix) {
-                    if (std::holds_alternative<glm::mat4>(node.transform))
+                    if (std::holds_alternative<mat4>(node.transform))
                         node.transform = Node::Trs {};
                     auto& translation = std::get<Node::Trs>(node.transform).translation;
-                    getGlm<glm::vec3>(translation, 3, value, "nodes[].translation");
+                    getMath<vec3>(translation, 3, value, "nodes[].translation");
                 }
                 foundTrs = true;
             } else if (key == "scale") {
                 if (!foundMatrix) {
-                    if (std::holds_alternative<glm::mat4>(node.transform))
+                    if (std::holds_alternative<mat4>(node.transform))
                         node.transform = Node::Trs {};
                     auto& scale = std::get<Node::Trs>(node.transform).scale;
-                    getGlm<glm::vec3>(scale, 3, value, "nodes[].scale");
+                    getMath<vec3>(scale, 3, value, "nodes[].scale");
                 }
                 foundTrs = true;
             } else if (key == "rotation") {
                 if (!foundMatrix) {
-                    if (std::holds_alternative<glm::mat4>(node.transform))
+                    if (std::holds_alternative<mat4>(node.transform))
                         node.transform = Node::Trs {};
                     auto& rotation = std::get<Node::Trs>(node.transform).rotation;
-                    getGlm<glm::quat>(rotation, 4, value, "nodes[].rotation");
+                    getMath<quat>(rotation, 4, value, "nodes[].rotation");
                 }
                 foundTrs = true;
             } else if (key == "mesh") {
@@ -1023,7 +1053,7 @@ void readMaterials(Gltf& file, const simdjson::dom::element& elem, const Logger&
                 auto& pbr = *material.pbrMetallicRoughness;
                 for (const auto [key, value] : obj) {
                     if (key == "baseColorFactor") {
-                        getGlm<glm::vec4>(pbr.baseColorFactor, 4, value,
+                        getMath<vec4>(pbr.baseColorFactor, 4, value,
                             "materials[].pbrMetallicRoughness.baseColorFactor", true);
                     } else if (key == "baseColorTexture") {
                         pbr.baseColorTexture = Material::TextureInfo {};
@@ -1053,7 +1083,7 @@ void readMaterials(Gltf& file, const simdjson::dom::element& elem, const Logger&
                 material.emissiveTexture = Material::TextureInfo {};
                 readTextureInfo(*material.emissiveTexture, value, "materials[].emissiveTexture");
             } else if (key == "emissiveFactor") {
-                getGlm<glm::vec3>(
+                getMath<vec3>(
                     material.emissiveFactor, 3, value, "materials[].emissiveFactor", true);
             } else if (key == "alphaMode") {
                 const auto mode = get<std::string>(value, "materials[].alphaMode");
