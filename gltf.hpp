@@ -333,7 +333,10 @@ struct Node {
     DisplayName name;
     Extras extras;
 
-    std::optional<NodeIndex> parent; // not part of the spec! convenience
+    // this parent field is not part of the spec! it's just for convenience
+    // and if a parent exists, it is well defined, because (spec):
+    // "no node may be a direct descendant of more than one node"
+    std::optional<NodeIndex> parent;
 
     glm::mat4 getTransformMatrix() const;
 };
