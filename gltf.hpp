@@ -6,6 +6,7 @@
 static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
 #endif
 
+#include <cmath>
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -50,6 +51,7 @@ using SamplerIndex = size_t;
 using SceneIndex = size_t;
 using SkinIndex = size_t;
 using TextureIndex = size_t;
+using LightIndex = size_t;
 
 using vec3 = std::array<float, 3>;
 using vec4 = std::array<float, 4>;
@@ -344,6 +346,8 @@ struct Node {
     DisplayName name;
     Extras extras;
 
+    std::optional<LightIndex> light; // KHR_lights_punctual
+
     // this parent field is not part of the spec! it's just for convenience
     // and if a parent exists, it is well defined, because (spec):
     // "no node may be a direct descendant of more than one node"
@@ -403,6 +407,26 @@ struct Animation {
     Extras extras;
 };
 
+struct Light {
+    struct Directional {
+    };
+
+    struct Point {
+        std::optional<float> range; // infinite if undefined
+    };
+
+    struct Spot {
+        std::optional<float> range; // infinite if undefined
+        float innerConeAngle = 0.0f;
+        float outerConeAngle = M_PI_4;
+    };
+
+    DisplayName name;
+    vec3 color { 1.0f, 1.0f, 1.0f }; // linear RGB
+    float intensity = 1.0f; // point & spot: candela, directional: lux
+    std::variant<Directional, Point, Spot> parameters;
+};
+
 struct Gltf {
     struct Asset {
         std::optional<std::string> copyright;
@@ -433,6 +457,8 @@ struct Gltf {
     std::vector<Texture> textures;
 
     Extras extras;
+
+    std::vector<Light> lights; // KHR_lights_punctual
 
     std::pair<const uint8_t*, size_t> getBufferViewData(BufferViewIndex idx) const;
     std::pair<const uint8_t*, size_t> getImageData(ImageIndex idx) const;

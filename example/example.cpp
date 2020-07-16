@@ -664,6 +664,33 @@ std::optional<Scene> loadGltf(const std::filesystem::path& path, float aspectRat
         }
     }
 
+    // I don't want to render them, so I'll just print them
+    for (size_t i = 0; i < gltfFile.lights.size(); ++i) {
+        const auto& light = gltfFile.lights[i];
+        LOG_DEBUG("light {} ({})", i, light.name);
+        LOG_DEBUG("color: {}", makeVec3(light.color));
+        LOG_DEBUG("intensity: {}", light.intensity);
+        if (const auto directional = std::get_if<gltf::Light::Directional>(&light.parameters)) {
+            LOG_DEBUG("type: directional");
+        } else if (const auto point = std::get_if<gltf::Light::Point>(&light.parameters)) {
+            LOG_DEBUG("type: point");
+            LOG_DEBUG("range: {}", point->range);
+        } else if (const auto spot = std::get_if<gltf::Light::Spot>(&light.parameters)) {
+            LOG_DEBUG("type: spot");
+            LOG_DEBUG("range: {}", spot->range);
+            LOG_DEBUG("innerConeAngle: {}", spot->innerConeAngle);
+            LOG_DEBUG("outerConeAngle: {}", spot->outerConeAngle);
+        } else {
+            assert(false && "Invalid light type");
+        }
+
+        for (size_t n = 0; n < gltfFile.nodes.size(); ++n) {
+            const auto& nlight = gltfFile.nodes[n].light;
+            if (nlight && *nlight == i)
+                LOG_DEBUG("used by node: {}", n);
+        }
+    }
+
     return scene;
 }
 

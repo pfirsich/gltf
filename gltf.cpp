@@ -531,6 +531,23 @@ void readNodes(Gltf& file, const simdjson::dom::element& elem, const Logger& log
                 node.name = get<std::string>(value, "nodes[].name");
             } else if (key == "extras") {
                 readExtras(node.extras, value);
+            } else if (key == "extensions") {
+                const auto obj = get<dom::object>(value, "nodes[].extensions");
+                for (const auto [key, value] : obj) {
+                    if (key == "KHR_lights_punctual") {
+                        const auto obj
+                            = get<dom::object>(value, "nodes[].extensions.KHR_lights_punctual");
+                        for (const auto [key, value] : obj) {
+                            if (key == "light") {
+                                node.light = get<uint64_t>(
+                                    value, "nodes[].extensions.KHR_lights_punctual.light");
+                            } else {
+                                unknownKey(key, "nodes[].extensions.KHR_lights_punctual");
+                            }
+                        }
+                    }
+                    // Ignore unknown extensions
+                }
             } else {
                 unknownKey(key, "nodes[]");
             }
@@ -1183,6 +1200,75 @@ void readMeshes(Gltf& file, const simdjson::dom::element& elem, const Logger& lo
     }
 }
 
+void readLights(Gltf& file, const simdjson::dom::element& elem, const Logger& /*logger*/)
+{
+    using namespace simdjson;
+
+    const auto lights = get<dom::array>(elem, "lights");
+    for (const auto item : lights) {
+        const auto obj = get<dom::object>(item, "lights[]");
+        std::optional<Light::Spot> spot;
+        std::optional<std::string> type;
+        std::optional<float> range;
+        auto& light = file.lights.emplace_back();
+        for (const auto [key, value] : obj) {
+            if (key == "name") {
+                light.name
+                    = get<std::string>(value, "extensions.KHR_lights_punctual.lights[].name");
+            } else if (key == "color") {
+                getMath<vec3>(
+                    light.color, 3, value, "extensions.KHR_lights_punctual.lights[].color", true);
+            } else if (key == "intensity") {
+                light.intensity
+                    = get<float>(value, "extensions.KHR_lights_punctual.lights[].intensity");
+            } else if (key == "type") {
+                type = get<std::string>(
+                    value, "extensions.KHR_lights_punctual.lights[].intensity.type");
+                if (*type != "directional" && *type != "point" && *type != "spot")
+                    error("Invalid value for \"type\" in light");
+            } else if (key == "range") {
+                range = get<float>(value, "extensions.KHR_lights_punctual.lights[].range");
+            } else if (key == "spot") {
+                const auto obj
+                    = get<dom::object>(value, "extensions.KHR_lights_punctual.lights[].spot");
+                spot = Light::Spot {};
+                for (const auto [key, value] : obj) {
+                    if (key == "innerConeAngle") {
+                        spot->innerConeAngle = get<float>(
+                            value, "extensions.KHR_lights_punctual.lights[].spot.innerConeAngle");
+                    } else if (key == "outerConeAngle") {
+                        spot->outerConeAngle = get<float>(
+                            value, "extensions.KHR_lights_punctual.lights[].spot.outerConeAngle");
+                    } else {
+                        unknownKey(key, "extensions.KHR_lights_punctual.lights[].spot");
+                    }
+                }
+            } else {
+                unknownKey(key, "extensions.KHR_lights_punctual.lights[]");
+            }
+        }
+
+        parseAssert(type.has_value(), "Missing mandatory \"type\" in light");
+
+        if (spot.has_value() && (*type == "directional" || *type == "point")) {
+            error("Property \"spot\" defined for light with type \"", *type, "\"");
+        }
+
+        if (*type == "directional") {
+            parseAssert(!range.has_value(),
+                "Property \"range\" defined for light with type \"directional\"");
+            light.parameters = Light::Directional {};
+        } else if (*type == "point") {
+            light.parameters = Light::Point { range };
+        } else if (*type == "spot") {
+            light.parameters = *spot;
+            std::get<Light::Spot>(light.parameters).range = range;
+        } else {
+            assert(false);
+        }
+    }
+}
+
 void validateIndices(const Gltf& file)
 {
     auto checkOob = [](std::string_view path, size_t index, size_t size) {
@@ -1272,6 +1358,9 @@ void validateIndices(const Gltf& file)
 
         if (node.skin)
             checkOob("nodes[].skin", *node.skin, file.skins.size());
+
+        if (node.light)
+            checkOob("nodes[].light", *node.light, file.lights.size());
     }
 
     // Nothing to do for samplers
@@ -1583,6 +1672,21 @@ std::optional<Gltf> loadJson(const uint8_t* buffer, size_t size, bool padded,
                 readTextures(file, value, logger);
             } else if (key == "extras") {
                 readExtras(file.extras, value);
+            } else if (key == "extensions") {
+                const auto obj = get<dom::object>(value, "extensions");
+                for (const auto [key, value] : obj) {
+                    if (key == "KHR_lights_punctual") {
+                        const auto obj = get<dom::object>(value, "extensions.KHR_lights_punctual");
+                        for (const auto [key, value] : obj) {
+                            if (key == "lights") {
+                                readLights(file, value, logger);
+                            } else {
+                                unknownKey(key, "extensions.KHR_lights_punctual");
+                            }
+                        }
+                    }
+                    // Ignore unknown extensions
+                }
             } else {
                 error("Unknown property \"", key, "\" in glTF file");
             }
