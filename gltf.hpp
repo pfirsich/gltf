@@ -318,6 +318,8 @@ struct Mesh {
 
 struct Skin {
     std::optional<AccessorIndex> inverseBindMatrices;
+    // Root node, but not really necessary and may give weird results if used (CesiumMan).
+    // I found it better to just use the node that has the skin attached as the root node.
     std::optional<NodeIndex> skeleton;
     std::vector<NodeIndex> joints; // required
 
@@ -409,9 +411,13 @@ struct Animation {
     Extras extras;
 };
 
+// https://github.com/KhronosGroup/glTF/tree/master/extensions/2.0/Khronos/KHR_lights_punctual
 struct Light {
     struct Directional {
     };
+
+    // recommendation for range:
+    // attenuation = max(min(1.0 - (current_distance / range)^4, 1), 0) / current_distance^2
 
     struct Point {
         std::optional<float> range; // infinite if undefined
