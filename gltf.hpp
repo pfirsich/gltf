@@ -305,6 +305,8 @@ struct Mesh {
         std::optional<MaterialIndex> material;
         Mode mode = Mode::Triangles;
         // std::vector<Target> targets
+
+        Extras extras;
     };
 
     std::vector<Primitive> primitives;

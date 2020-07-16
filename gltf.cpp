@@ -384,6 +384,8 @@ void readAsset(Gltf& file, const simdjson::dom::element& elem, const Logger& log
             foundVersion = true;
         } else if (key == "minVersion") {
             file.asset.minVersion = get<std::string>(value, "asset.minVersion");
+        } else if (key == "extensions") {
+            // Ignore unknown extensions
         } else if (key == "extras") {
             readExtras(file.asset.extras, value);
         } else {
@@ -412,6 +414,8 @@ void readScenes(Gltf& file, const simdjson::dom::element& elem, const Logger& /*
                     scene.nodes.push_back(get<uint64_t>(item, "scenes[].nodes[]"));
             } else if (key == "name") {
                 scene.name = get<std::string>(value, "scenes[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(scene.extras, value);
             } else {
@@ -442,6 +446,8 @@ void readSkins(Gltf& file, const simdjson::dom::element& elem, const Logger& /*l
                 foundJoints = true;
             } else if (key == "name") {
                 skin.name = get<std::string>(value, "skins[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(skin.extras, value);
             } else {
@@ -467,6 +473,8 @@ void readTextures(Gltf& file, const simdjson::dom::element& elem, const Logger& 
                 texture.source = get<uint64_t>(value, "textures[].source");
             } else if (key == "name") {
                 texture.name = get<std::string>(value, "textures[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(texture.extras, value);
             } else {
@@ -529,8 +537,6 @@ void readNodes(Gltf& file, const simdjson::dom::element& elem, const Logger& log
                 logger.warn("Morph targets are not implemented yet.");
             } else if (key == "name") {
                 node.name = get<std::string>(value, "nodes[].name");
-            } else if (key == "extras") {
-                readExtras(node.extras, value);
             } else if (key == "extensions") {
                 const auto obj = get<dom::object>(value, "nodes[].extensions");
                 for (const auto [key, value] : obj) {
@@ -548,6 +554,8 @@ void readNodes(Gltf& file, const simdjson::dom::element& elem, const Logger& log
                     }
                     // Ignore unknown extensions
                 }
+            } else if (key == "extras") {
+                readExtras(node.extras, value);
             } else {
                 unknownKey(key, "nodes[]");
             }
@@ -580,6 +588,8 @@ void readSamplers(Gltf& file, const simdjson::dom::element& elem, const Logger& 
                     = static_cast<Sampler::WrapMode>(get<uint64_t>(value, "samplers[].wrapT"));
             } else if (key == "name") {
                 sampler.name = get<std::string>(value, "samplers[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(sampler.extras, value);
             } else {
@@ -670,6 +680,8 @@ void readAccessors(Gltf& file, const simdjson::dom::element& elem, const Logger&
                 logger.warn("Sparse accessors are not implemented yet.");
             } else if (key == "name") {
                 accessor.name = get<std::string>(value, "accessors[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(accessor.extras, value);
             } else {
@@ -750,6 +762,8 @@ void readAnimations(Gltf& file, const simdjson::dom::element& elem, const Logger
                                 } else if (key == "path") {
                                     channel.target.path = parseChannelPath(get<std::string>(
                                         value, "animations[].channels[].target.path"));
+                                } else if (key == "extensions") {
+                                    // Ignore unknown extensions
                                 } else if (key == "extras") {
                                     readExtras(channel.target.extras, value);
                                 } else {
@@ -757,6 +771,8 @@ void readAnimations(Gltf& file, const simdjson::dom::element& elem, const Logger
                                 }
                             }
                             foundTarget = true;
+                        } else if (key == "extensions") {
+                            // Ignore unknown extensions
                         } else if (key == "extras") {
                             readExtras(channel.extras, value);
                         } else {
@@ -783,6 +799,8 @@ void readAnimations(Gltf& file, const simdjson::dom::element& elem, const Logger
                         } else if (key == "output") {
                             sampler.output = get<uint64_t>(value, "animations[].samplers[].output");
                             foundOutput = true;
+                        } else if (key == "extensions") {
+                            // Ignore unknown extensions
                         } else if (key == "extras") {
                             readExtras(sampler.extras, value);
                         } else {
@@ -795,6 +813,8 @@ void readAnimations(Gltf& file, const simdjson::dom::element& elem, const Logger
                 foundSamplers = true;
             } else if (key == "name") {
                 animation.name = get<std::string>(value, "animations[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(animation.extras, value);
             } else {
@@ -823,6 +843,8 @@ void readBuffers(Gltf& file, const simdjson::dom::element& elem, const Logger& /
                 foundByteLength = true;
             } else if (key == "name") {
                 buffer.name = get<std::string>(value, "buffer[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(buffer.extras, value);
             } else {
@@ -863,6 +885,8 @@ void readBufferViews(Gltf& file, const simdjson::dom::element& elem, const Logge
                     = static_cast<BufferView::Target>(get<uint64_t>(value, "bufferViews[].target"));
             } else if (key == "name") {
                 bufferView.name = get<std::string>(value, "bufferView[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(bufferView.extras, value);
             } else {
@@ -907,6 +931,8 @@ void readCameras(Gltf& file, const simdjson::dom::element& elem, const Logger& /
                     } else if (key == "znear") {
                         perspective->znear = get<float>(value, "cameras[].perspective.znear");
                         foundZnear = true;
+                    } else if (key == "extensions") {
+                        // Ignore unknown extensions
                     } else if (key == "extras") {
                         readExtras(perspective->extras, value);
                     }
@@ -930,6 +956,8 @@ void readCameras(Gltf& file, const simdjson::dom::element& elem, const Logger& /
                     } else if (key == "znear") {
                         orthographic->znear = get<float>(value, "cameras[].orthographic.znear");
                         foundZnear = true;
+                    } else if (key == "extensions") {
+                        // Ignore unknown extensions
                     } else if (key == "extras") {
                         readExtras(orthographic->extras, value);
                     }
@@ -940,6 +968,8 @@ void readCameras(Gltf& file, const simdjson::dom::element& elem, const Logger& /
                 parseAssert(foundZnear, "Missing mandatory \"znear\" in camera.orthographic");
             } else if (key == "name") {
                 camera.name = get<std::string>(value, "cameras[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(camera.extras, value);
             } else {
@@ -982,6 +1012,8 @@ void readImages(Gltf& file, const simdjson::dom::element& elem, const Logger& /*
                 bufferView = get<uint64_t>(value, "images[].bufferView");
             } else if (key == "name") {
                 image.name = get<std::string>(value, "images[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(image.extras, value);
             } else {
@@ -1045,6 +1077,8 @@ void readTextureInfo(T& textureInfo, const simdjson::dom::element& elem, std::st
             } else {
                 unknownKey(key, path);
             }
+        } else if (key == "extensions") {
+            // Ignore unknown extensions
         } else if (key == "extras") {
             readExtras(textureInfo.extras, value);
         } else {
@@ -1065,6 +1099,8 @@ void readMaterials(Gltf& file, const simdjson::dom::element& elem, const Logger&
         for (const auto [key, value] : obj) {
             if (key == "name") {
                 material.name = get<std::string>(value, "materials[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(material.extras, value);
             } else if (key == "pbrMetallicRoughness") {
@@ -1089,6 +1125,8 @@ void readMaterials(Gltf& file, const simdjson::dom::element& elem, const Logger&
                         pbr.metallicRoughnessTexture = Material::TextureInfo {};
                         readTextureInfo(*pbr.metallicRoughnessTexture, value,
                             "materials[].pbrMetallicRoughness.metallicRoughnessTexture");
+                    } else if (key == "extensions") {
+                        // Ignore unknown extensions
                     } else if (key == "extras") {
                         readExtras(pbr.extras, value);
                     }
@@ -1184,6 +1222,12 @@ void readMeshes(Gltf& file, const simdjson::dom::element& elem, const Logger& lo
                                 get<uint64_t>(value, "meshes[].primitives[].mode"));
                         } else if (key == "targets") {
                             logger.warn("Morph targets are not implemented yet.");
+                        } else if (key == "extensions") {
+                            // Ignore unknown extensions
+                        } else if (key == "extras") {
+                            readExtras(primitive.extras, value);
+                        } else {
+                            unknownKey(key, "meshes[].primitives[]");
                         }
                     }
                 }
@@ -1191,6 +1235,8 @@ void readMeshes(Gltf& file, const simdjson::dom::element& elem, const Logger& lo
                 logger.warn("Morph targets are not implemented yet.");
             } else if (key == "name") {
                 mesh.name = get<std::string>(value, "meshes[].name");
+            } else if (key == "extensions") {
+                // Ignore unknown extensions
             } else if (key == "extras") {
                 readExtras(mesh.extras, value);
             } else {
@@ -1670,8 +1716,6 @@ std::optional<Gltf> loadJson(const uint8_t* buffer, size_t size, bool padded,
                 readSkins(file, value, logger);
             } else if (key == "textures") {
                 readTextures(file, value, logger);
-            } else if (key == "extras") {
-                readExtras(file.extras, value);
             } else if (key == "extensions") {
                 const auto obj = get<dom::object>(value, "extensions");
                 for (const auto [key, value] : obj) {
@@ -1687,6 +1731,8 @@ std::optional<Gltf> loadJson(const uint8_t* buffer, size_t size, bool padded,
                     }
                     // Ignore unknown extensions
                 }
+            } else if (key == "extras") {
+                readExtras(file.extras, value);
             } else {
                 error("Unknown property \"", key, "\" in glTF file");
             }
