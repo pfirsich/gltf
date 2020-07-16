@@ -5,6 +5,7 @@
 #include <iostream>
 #include <set>
 #include <sstream>
+#include <unordered_set>
 
 #include <simdjson.h>
 
@@ -134,6 +135,8 @@ std::pair<const uint8_t*, size_t> Gltf::getAccessorData(AccessorIndex idx) const
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
+
+constexpr std::array<std::string_view, 1> supportedExtensions { "KHR_lights_punctual" };
 
 std::unordered_map<LogSeverity, std::string_view> severityToString {
     { LogSeverity::Warning, "Warning" },
@@ -1452,6 +1455,60 @@ std::function<BufferLoader> makeDefaultBufferLoader(const std::filesystem::path&
     return [baseDir](std::string_view uri) { return defaultBufferLoader(uri, baseDir); };
 }
 
+void checkVersion(const Gltf::Asset& asset, const Logger& logger)
+{
+    // exactly the version we are targeting. we are fine
+    if (asset.version == "2.0")
+        return;
+
+    // version does not match, but minVersion is small enough
+    // if there was a version before the version we are targeting (2.0), we would have to do
+    // a range check here
+    if (asset.minVersion) {
+        if (*asset.minVersion == "2.0")
+            return;
+        else
+            error("\"minVersion\" is too high");
+    }
+
+    // Version does not match and no minVersion given => check major version
+    const auto pos = asset.version.find('.');
+    if (pos == std::string::npos)
+        error("Malformed \"version\"");
+
+    const auto majorStr = asset.version.substr(0, pos + 1);
+    if (majorStr == "2") {
+        // Version does not match exactly, but glTF is forwards-compatible, so it should work
+        logger.warn("\"asset.version\" is not 2.0");
+        return;
+    }
+
+    error("Unsupported asset version");
+}
+
+void checkRequiredExtensions(const std::vector<std::string>& required)
+{
+    if (required.empty())
+        return;
+
+    std::unordered_set<std::string_view> unsupported(required.cbegin(), required.cend());
+
+    for (const auto ext : supportedExtensions)
+        unsupported.erase(ext);
+
+    if (unsupported.size() > 0) {
+        std::stringstream ss;
+        ss << "[";
+        bool first = true;
+        for (const auto ext : unsupported) {
+            ss << (!first ? ", " : "") << ext;
+            first = false;
+        }
+        ss << "]";
+        error("Required extensions are not supported: ", ss.str());
+    }
+}
+
 std::optional<Gltf> loadJson(const uint8_t* buffer, size_t size, bool padded,
     std::function<BufferLoader> bufferLoader, const Logger& logger,
     const LoadParameters& parameters)
@@ -1479,18 +1536,23 @@ std::optional<Gltf> loadJson(const uint8_t* buffer, size_t size, bool padded,
             if (key == "asset") {
                 readAsset(file, value, logger);
                 foundAsset = true;
-                if (file.asset.version != "2.0")
-                    logger.warn("\"asset.version\" is not 2.0");
+                checkVersion(file.asset, logger);
             } else if (key == "extensionsUsed") {
                 const auto arr = get<simdjson::dom::array>(value, "extensionsUsed");
                 for (const auto v : arr)
                     file.extensionsUsed.push_back(get<std::string>(v, "extensionsUsed[]"));
+
+                std::unordered_set<std::string_view> supported(
+                    supportedExtensions.cbegin(), supportedExtensions.cend());
+                for (const auto& ext : file.extensionsUsed) {
+                    if (supported.count(ext) == 0)
+                        logger.warn("File uses unsupported extension \"", ext, "\"");
+                }
             } else if (key == "extensionsRequired") {
                 const auto arr = get<simdjson::dom::array>(value, "extensionsRequired");
                 for (const auto v : arr)
                     file.extensionsRequired.push_back(get<std::string>(v, "extensionsRequired[]"));
-                if (file.extensionsRequired.size() > 0)
-                    error("Required extensions are not supported.");
+                checkRequiredExtensions(file.extensionsRequired);
             } else if (key == "accessors") {
                 readAccessors(file, value, logger);
             } else if (key == "animations") {
