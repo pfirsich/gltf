@@ -1915,7 +1915,6 @@ std::optional<Gltf> load(const std::filesystem::path& path, const LoadParameters
         }
         return loadJson(contents.data(), size, true, bufferLoader, logger, parameters);
     } else {
-        std::cout << "GLB" << std::endl;
         // We assume it's GLB
         if (!checkGlbHeader(glbHeader, size, logger))
             return std::nullopt; // already logged something
