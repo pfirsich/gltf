@@ -3,10 +3,11 @@
 // We want to copy buffers as-is. According to GLTF spec they are all litte-endian
 // Windows is always little endian
 #ifndef _WIN32
-static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
+static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
 #endif
 
 #include <cmath>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <optional>
