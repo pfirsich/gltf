@@ -118,9 +118,8 @@ std::pair<const uint8_t*, size_t> Gltf::getImageData(ImageIndex idx) const
         return std::make_pair(uriData->data.data(), uriData->data.size());
     } else if (const auto bvData = std::get_if<Image::BufferViewData>(imageData)) {
         return getBufferViewData(bvData->bufferView);
-    } else {
-        assert(false && "Invalid variant state");
     }
+    std::abort();
 }
 
 std::pair<const uint8_t*, size_t> Gltf::getAccessorData(AccessorIndex idx) const

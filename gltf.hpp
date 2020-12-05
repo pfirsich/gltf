@@ -6,6 +6,7 @@
 static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
 #endif
 
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <functional>

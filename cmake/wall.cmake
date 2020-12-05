@@ -1,7 +1,5 @@
 function(set_wall target)
-  if(MSVC)
-    target_compile_options(${target} PRIVATE /W4 /WX)
-  else()
+  if(NOT MSVC)
     target_compile_options(${target} PRIVATE -Wall -Wextra -pedantic -Werror)
   endif()
 endfunction()
