@@ -244,7 +244,8 @@ simdjson::dom::parser& getSimdJsonParser()
 template <typename T, typename GetType = T>
 T get(std::string_view type, const simdjson::dom::element& element, std::string_view path)
 {
-    const auto [v, error] = element.get<GetType>();
+    GetType v;
+    const auto error = element.get(v);
     if (error)
         throw JsonException(path, type);
 
