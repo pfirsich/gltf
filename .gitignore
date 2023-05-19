@@ -2,7 +2,10 @@
 .clangd/
 .DS_Store
 .vscode/
-build/
+build*/
 compile_commands.json
 notes
 untracked/
+vcpkg_installed/
+subprojects/*
+!subprojects/*.wrap
