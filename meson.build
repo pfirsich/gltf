@@ -7,7 +7,7 @@ run_command(vcpkg,
   '--x-manifest-root=' + meson.current_source_dir(),
   check: true)
 
-simdjson_dep = dependency('simdjson')
+simdjson_dep = dependency('simdjson', include_type: 'system')
 
 gltf_deps = [simdjson_dep]
 gltf = static_library('gltf', ['gltf.cpp'], dependencies: gltf_deps)
