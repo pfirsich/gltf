@@ -1,8 +1,14 @@
 #include <iostream>
+#include <set>
 
 #include <glm/gtx/transform.hpp>
-#include <glw.hpp>
-#include <glwx.hpp>
+#include <glwx/aabb.hpp>
+#include <glwx/debug.hpp>
+#include <glwx/primitive.hpp>
+#include <glwx/shader.hpp>
+#include <glwx/texture.hpp>
+#include <glwx/transform.hpp>
+#include <glwx/window.hpp>
 
 #include "gltf.hpp"
 
