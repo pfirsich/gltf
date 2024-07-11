@@ -1,9 +1,6 @@
 [submodule "glwrap"]
 	path = example/glwrap
 	url = https://github.com/pfirsich/glwrap.git
-[submodule "simdjson"]
-	path = simdjson
-	url = https://github.com/simdjson/simdjson.git
 [submodule "vcpkg"]
 	path = vcpkg
 	url = https://github.com/microsoft/vcpkg
