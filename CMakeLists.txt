@@ -20,9 +20,10 @@ if (GLTF_ENABLE_ASAN)
   include(cmake/asan.cmake)
 endif()
 
-set(SRC gltf.cpp)
+set(SRC gltf.hpp gltf.cpp)
 
 add_library(gltf STATIC ${SRC})
+target_include_directories(gltf PUBLIC .)
 target_link_libraries(gltf PRIVATE simdjson)
 set_wall(gltf)
 
